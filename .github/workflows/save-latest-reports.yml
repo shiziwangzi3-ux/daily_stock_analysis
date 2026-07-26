@@ -1,0 +1,92 @@
+name: 保存最新分析报告
+
+on:
+  workflow_run:
+    workflows:
+      - 每日股票分析
+    types:
+      - completed
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: save-latest-analysis-reports
+  cancel-in-progress: false
+
+jobs:
+  save-latest-reports:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v5
+        with:
+          ref: main
+
+      - name: 下载本次分析报告
+        uses: actions/download-artifact@v4
+        with:
+          name: analysis-reports-${{ github.event.workflow_run.run_number }}
+          path: downloaded-artifact
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 整理最新报告与历史归档
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p latest archived_reports
+
+          stock_report="$(find downloaded-artifact -type f -name 'report_*.md' | sort | tail -n 1 || true)"
+          market_report="$(find downloaded-artifact -type f -name 'market_review_*.md' | sort | tail -n 1 || true)"
+          saved=0
+
+          if [ -n "$stock_report" ]; then
+            cp "$stock_report" latest/latest_stock_analysis.md
+            cp "$stock_report" "archived_reports/$(basename "$stock_report")"
+            saved=1
+          fi
+
+          if [ -n "$market_report" ]; then
+            cp "$market_report" latest/latest_market_review.md
+            cp "$market_report" "archived_reports/$(basename "$market_report")"
+            saved=1
+          fi
+
+          if [ "$saved" -ne 1 ]; then
+            echo "未找到可保存的报告文件"
+            exit 1
+          fi
+
+          cat > latest/README.md <<EOF
+          # 最新股票分析报告
+
+          本目录由 GitHub Actions 自动更新。
+
+          - 个股智能分析：latest_stock_analysis.md
+          - A股大盘复盘：latest_market_review.md
+          - 来源工作流：${{ github.event.workflow_run.html_url }}
+          - 工作流编号：${{ github.event.workflow_run.run_number }}
+          - 保存时间：$(TZ='Asia/Shanghai' date '+%Y-%m-%d %H:%M:%S')
+          EOF
+
+      - name: 提交到仓库
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add latest archived_reports
+
+          if git diff --cached --quiet; then
+            echo "报告没有变化，无需提交"
+            exit 0
+          fi
+
+          git commit -m "Save latest stock analysis reports"
+          git push origin main
