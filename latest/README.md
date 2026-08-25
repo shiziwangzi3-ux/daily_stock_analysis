@@ -4,6 +4,6 @@
 
 - 个股智能分析：latest_stock_analysis.md
 - A股大盘复盘：latest_market_review.md
-- 来源工作流：https://github.com/shiziwangzi3-ux/daily_stock_analysis/actions/runs/32717417298
-- 工作流编号：24
-- 保存时间：2026-08-24 18:41:38
+- 来源工作流：https://github.com/shiziwangzi3-ux/daily_stock_analysis/actions/runs/32837408618
+- 工作流编号：25
+- 保存时间：2026-08-25 18:37:34
